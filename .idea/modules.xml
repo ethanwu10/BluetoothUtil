@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/BluetoothUtil.iml" filepath="$PROJECT_DIR$/BluetoothUtil.iml" />
+      <module fileurl="file://$PROJECT_DIR$/bluetoothutil/bluetoothutil.iml" filepath="$PROJECT_DIR$/bluetoothutil/bluetoothutil.iml" />
+    </modules>
+  </component>
+</project>
+
