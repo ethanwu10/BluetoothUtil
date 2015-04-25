@@ -8,6 +8,8 @@ import android.util.Log;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.UUID;
 
 public class BluetoothSppClient {
@@ -28,6 +30,8 @@ public class BluetoothSppClient {
 
     private ConnectThread mConnectThread;
 
+    private ReadThread mReadThread;
+
     public BluetoothSppClient(BluetoothDevice bluetoothDevice, Handler handler) {
         this(bluetoothDevice, handler, UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"));
     }
@@ -39,13 +43,6 @@ public class BluetoothSppClient {
     }
 
     public synchronized void connect() {
-        if (mBluetoothConnectionState == STATE_CONNECTING) {
-            if (mConnectThread != null) {
-                mConnectThread.cancel();
-                mConnectThread = null;
-            }
-        }
-
         if (mConnectThread != null) {
             mConnectThread.cancel();
             mConnectThread = null;
@@ -59,6 +56,10 @@ public class BluetoothSppClient {
 
     public synchronized void close() {
         try {
+            if (mReadThread != null) {
+                mReadThread.interrupt();
+                mReadThread = null;
+            }
             if (mBluetoothSocket != null) {
                 mBluetoothSocket.close();
             }
@@ -85,6 +86,28 @@ public class BluetoothSppClient {
         byte[] buf = new byte[1];
         buf[0] = buffer;
         write(buf);
+    }
+
+    public byte[] read(int len) throws IOException, IllegalStateException {
+        if (getState() != STATE_CONNECTED) {
+            throw new IllegalStateException("BluetoothSppClient::read: attempt to read without connection open");
+        }
+        if (mReadThread.getNextByte() < len) {
+            throw new IOException("BluetoothSppClient::read: attempt to get more elements than available");
+        }
+        byte[] tmp = new byte[len];
+        for (int i = 0; i < len; i++) {
+            tmp[i] = mReadThread.getNextByte();
+        }
+        return tmp;
+    }
+
+    public byte read() throws IOException, IllegalStateException {
+        return read(1)[0];
+    }
+
+    public int getReadBufferSize() {
+        return mReadThread.getBufferSize();
     }
 
     public int getState() {
@@ -126,6 +149,9 @@ public class BluetoothSppClient {
 
         mBluetoothSocket = mmSocket;
 
+        mReadThread = new ReadThread(mBluetoothSocket);
+        mReadThread.start();
+
         setState(STATE_CONNECTED);
 
         Log.i(TAG, "Connected to " + mmDevice.getName());
@@ -150,6 +176,10 @@ public class BluetoothSppClient {
                 connectionFailed();
                 try {
                     mmSocket.close();
+
+                    if (BluetoothSppClient.this.getState() != STATE_NONE) { //cause error state on close
+                        setState(STATE_NONE);
+                    }
                 } catch (Exception e_close) {
                     e_close.printStackTrace();
                 }
@@ -161,6 +191,10 @@ public class BluetoothSppClient {
         public void cancel() {
             try {
                 mmSocket.close();
+
+                if (BluetoothSppClient.this.getState() != STATE_NONE) { //cause error state on close
+                    setState(STATE_NONE);
+                }
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -168,8 +202,11 @@ public class BluetoothSppClient {
     }
 
     private class ReadThread extends Thread {
+        public static final int BUFFER_SIZE = 1024;
         private final BluetoothSocket mmSocket;
         private final InputStream  mmInStream;
+
+        private Queue<Byte> queued_bytes;
 
         public ReadThread(BluetoothSocket socket) {
             mmSocket = socket;
@@ -182,10 +219,29 @@ public class BluetoothSppClient {
             }
 
             mmInStream = tmpIn;
+            queued_bytes = new LinkedList<>();
         }
 
         public void run() {
-            //TODO: Read data and store in queue
+            byte[] buf = new byte[BUFFER_SIZE];
+            int bytes_read;
+
+            while (true) {
+                try {
+                    bytes_read = mmInStream.read(buf, 0, BUFFER_SIZE);
+
+                    Log.v(TAG, bytes_read + " read");
+
+                    for (int i = 0; i < bytes_read; ++i) {
+                        queued_bytes.add(buf[i]);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    if (e.getMessage().equals("socket closed")) { //if socket closed, quit
+                        break;
+                    }
+                }
+            }
         }
 
         public void cancel() {
@@ -194,6 +250,25 @@ public class BluetoothSppClient {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+
+        public byte getNextByte() throws IOException {
+            if (!queued_bytes.isEmpty()) {
+                Byte element = queued_bytes.element();
+                queued_bytes.remove();
+                return element;
+            }
+            else {
+                throw new IOException("BluetoothSppClient::ReadThread::getNextByte: attempt to get element when queue empty");
+            }
+        }
+
+        public int getBufferSize() {
+            return queued_bytes.size();
+        }
+
+        public void clearBuffer() {
+            queued_bytes.clear();
         }
     }
 
