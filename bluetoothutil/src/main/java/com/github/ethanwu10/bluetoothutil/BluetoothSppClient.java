@@ -11,6 +11,8 @@ import java.io.OutputStream;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.locks.LockSupport;
 
 public class BluetoothSppClient {
 
@@ -22,6 +24,8 @@ public class BluetoothSppClient {
 
     public static final int STATE_NONE = 0, STATE_CONNECTING = 1, STATE_CONNECTED = 2;
 
+    public static final int QUEUE_MAX_SIZE = 100;
+
     private Handler mHandler;
     private BluetoothDevice mBluetoothDevice;
     private BluetoothSocket mBluetoothSocket;
@@ -31,6 +35,7 @@ public class BluetoothSppClient {
     private ConnectThread mConnectThread;
 
     private ReadThread mReadThread;
+    private WriteThread mWriteThread;
 
     public BluetoothSppClient(BluetoothDevice bluetoothDevice, Handler handler) {
         this(bluetoothDevice, handler, UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"));
@@ -60,6 +65,10 @@ public class BluetoothSppClient {
                 mReadThread.interrupt();
                 mReadThread = null;
             }
+            if (mWriteThread != null) {
+                mWriteThread.close();
+                mWriteThread = null;
+            }
             if (mBluetoothSocket != null) {
                 mBluetoothSocket.close();
             }
@@ -78,14 +87,13 @@ public class BluetoothSppClient {
     }
 
     public void write(byte[] buffer) {
-        WriteThread writeThread = new WriteThread(mBluetoothSocket, buffer);
-        writeThread.start();
+        for (byte b : buffer) {
+            write(b);
+        }
     }
 
     public void write(byte buffer) {
-        byte[] buf = new byte[1];
-        buf[0] = buffer;
-        write(buf);
+        mWriteThread.write(buffer);
     }
 
     public byte[] read(int len) throws IOException, IllegalStateException {
@@ -151,6 +159,7 @@ public class BluetoothSppClient {
 
         mReadThread = new ReadThread(mBluetoothSocket);
         mReadThread.start();
+        mWriteThread = new WriteThread(mBluetoothSocket);
 
         setState(STATE_CONNECTED);
 
@@ -230,8 +239,6 @@ public class BluetoothSppClient {
                 try {
                     bytes_read = mmInStream.read(buf, 0, BUFFER_SIZE);
 
-                    Log.v(TAG, bytes_read + " read");
-
                     for (int i = 0; i < bytes_read; ++i) {
                         queued_bytes.add(buf[i]);
                     }
@@ -276,12 +283,13 @@ public class BluetoothSppClient {
         private final BluetoothSocket mmSocket;
         private final OutputStream mmOutStream;
 
-        private final byte[] mData;
+        private Queue<Byte> toSend;
+        private boolean isRunning = true;
 
-        public WriteThread(BluetoothSocket socket, byte[] data) {
+        public WriteThread(BluetoothSocket socket) {
             mmSocket = socket;
-            mData = data;
             OutputStream tmpOut = null;
+            toSend = new ConcurrentLinkedQueue<>();
 
             try {
                 tmpOut = socket.getOutputStream();
@@ -290,13 +298,28 @@ public class BluetoothSppClient {
             }
 
             mmOutStream = tmpOut;
+            this.start();
         }
 
         public void run() {
-            try {
-                mmOutStream.write(mData);
-            } catch (Exception e) {
-                e.printStackTrace();
+            LockSupport.park();
+            while (isRunning) {
+                if (!toSend.isEmpty()) {
+                    try {
+                        mmOutStream.write(toSend.remove());
+                        if (toSend.isEmpty()) {
+                            LockSupport.park();
+                        }
+/*
+                        else if (toSend.size() > QUEUE_MAX_SIZE) {
+                            Log.w(TAG, "queue overloaded (" + toSend.size() + " elements); clearing...");
+                            toSend.clear();
+                        }
+*/
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
             }
         }
 
@@ -306,6 +329,16 @@ public class BluetoothSppClient {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+
+        public synchronized void write(byte data) {
+            toSend.add(data);
+            LockSupport.unpark(this);
+        }
+
+        public void close() {
+            isRunning = false;
+            LockSupport.unpark(this);
         }
     }
 
