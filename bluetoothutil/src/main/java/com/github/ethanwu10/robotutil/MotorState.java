@@ -1,7 +1,8 @@
-package com.github.ethanwu10.bluetoothutil.robotutil;
+package com.github.ethanwu10.robotutil;
 
 /**
  * A class that represents the state of a motor
+ *
  * @author Ethan
  */
 public class MotorState {

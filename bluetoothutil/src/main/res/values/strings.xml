@@ -1,3 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BluetoothUtil</string>
+
+    <string name="dialog_noBluetooth_title">No Bluetooth Adapter</string>
+    <string name="dialog_noBluetooth_message">Your device does not have a Bluetooth adapter, and this app may not function.</string>
+    <string name="dialog_bluetoothNotEnabled_title">Bluetooth is not Enabled</string>
+    <string name="dialog_bluetoothNotEnabled_message">Bluetooth must be enabled for this app to function.</string>
+    <string name="cancel">Cancel</string>
+    <string name="exit">Exit</string>
+    <string name="retry">Retry</string>
+    <string name="button_scan">Scan</string>
+    <string name="text_pairedDevices">Paired Devices</string>
+    <string name="text_newDevices">New Devices</string>
+    <string name="action_connect">Connect to NXT…</string>
+    <string name="action_disconnect">Disconnect</string>
+    <string name="text_pairedDevices_noDevices">No Paired Devices</string>
+    <string name="text_newDevices_noDevices">No Devices Found</string>
+    <string name="text_discoveryStarted">Discovery started</string>
+    <string name="text_discoveryFailed">Discovery Failed!</string>
+    <string name="text_discoveryCanceled">Discovery Canceled!</string>
+    <string name="text_scanning">Scanning</string>
+    <string name="button_cancel">Cancel</string>
+    <!--string name="text_connecting">Connecting</string-->
+    <!--string name="text_connecting_to">Connecting to:</string-->
+
 </resources>

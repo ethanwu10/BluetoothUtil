@@ -14,17 +14,54 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.locks.LockSupport;
 
+/**
+ * A client for Bluetooth SPP communication
+ * 
+ * @author Ethan 
+ */
 public class BluetoothSppClient {
 
     private static final String TAG = "BluetoothSppClient";
 
+    /**
+     * Message constant - connection to device failed
+     */
     public static final int MESSAGE_CONNECTION_FAILED = 2;
 
+    /**
+     * Message constant - connection state changed
+     *
+     * @see #STATE_NONE
+     * @see #STATE_CONNECTING
+     * @see #STATE_CONNECTED
+     */
     public static final int MESSAGE_STATE_CHANGE = 1;
 
-    public static final int STATE_NONE = 0, STATE_CONNECTING = 1, STATE_CONNECTED = 2;
+    /**
+     * State constant - not connected / idle
+     *
+     * @see #STATE_CONNECTING
+     * @see #STATE_CONNECTED
+     */
+    public static final int STATE_NONE = 0;
 
-    public static final int QUEUE_MAX_SIZE = 100;
+    /**
+     * State constant - currently connecting to a host
+     *
+     * @see #STATE_NONE
+     * @see #STATE_CONNECTED
+     */
+    public static final int STATE_CONNECTING = 1;
+
+    /**
+     * State constant - currently connected to a host
+     *
+     * @see #STATE_NONE
+     * @see #STATE_CONNECTING
+     */
+    public static final int STATE_CONNECTED = 2;
+
+    private static final int QUEUE_MAX_SIZE = 100;
 
     private Handler mHandler;
     private BluetoothDevice mBluetoothDevice;
@@ -37,16 +74,53 @@ public class BluetoothSppClient {
     private ReadThread mReadThread;
     private WriteThread mWriteThread;
 
+    /*
+     * Constructs an SPP client using the default bluetooth SPP UUID<br>(<code>00001101-0000-1000-8000-00805F9B34FB</code>)
+     * @param bluetoothDevice device to connect to
+     * @param handler event handler - receives {@link #MESSAGE_CONNECTION_FAILED}
+     *                and {@link #MESSAGE_STATE_CHANGE}
+     * 
+     * @see BluetoothSppClient#BluetoothSppClient(BluetoothDevice, Handler, UUID)
+     */
+    /**
+     * Constructs an SPP client using the default bluetooth SPP UUID<br>(<code>00001101-0000-1000-8000-00805F9B34FB</code>)
+     * @param bluetoothDevice device to connect to
+     * @param handler event handler - receives {@link #MESSAGE_CONNECTION_FAILED}
+     *                and {@link #MESSAGE_STATE_CHANGE}
+     */
     public BluetoothSppClient(BluetoothDevice bluetoothDevice, Handler handler) {
         this(bluetoothDevice, handler, UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"));
     }
 
+    /*
+     * Constructs an SPP client using a custom UUID
+     *
+     * @param bluetoothDevice device device to connect to
+     * @param handler event handler - receives {@link #MESSAGE_CONNECTION_FAILED}
+     *                and {@link #MESSAGE_STATE_CHANGE}
+     * @param uuid UUID to connect to
+     * 
+     * @see BluetoothSppClient#BluetoothSppClient(BluetoothDevice, Handler)
+     */
+    /**
+     * Constructs an SPP client using a custom UUID
+     *
+     * @param bluetoothDevice device device to connect to
+     * @param handler event handler - receives {@link #MESSAGE_CONNECTION_FAILED}
+     *                and {@link #MESSAGE_STATE_CHANGE}
+     * @param uuid UUID to connect to
+     */
     public BluetoothSppClient(BluetoothDevice bluetoothDevice, Handler handler, UUID uuid) {
         mHandler = handler;
         mBluetoothDevice = bluetoothDevice;
         mUUID = uuid;
     }
 
+    /**
+     * Initiates a connection
+     * <br><br>
+     * Also updates state to {@link #STATE_CONNECTING}
+     */
     public synchronized void connect() {
         if (mConnectThread != null) {
             mConnectThread.cancel();
@@ -59,6 +133,11 @@ public class BluetoothSppClient {
 
     }
 
+    /**
+     * Closes the connection
+     * <br><br>
+     * Also updates state to {@link #STATE_NONE}
+     */
     public synchronized void close() {
         try {
             if (mReadThread != null) {
@@ -77,6 +156,12 @@ public class BluetoothSppClient {
         }
     }
 
+    /**
+     * Cancels an active BT connection attempt <br>
+     * If no BT connection attempt is active (state is not
+     * {@link #STATE_CONNECTING}, and so not {@link #STATE_CONNECTED}
+     * or {@link #STATE_NONE}) it does nothing
+     */
     public void cancel_connection() {
         if (mConnectThread != null) {
             mConnectThread.interrupt();
@@ -86,16 +171,44 @@ public class BluetoothSppClient {
         }
     }
 
+    /**
+     * Writes data through the SPP connection
+     * 
+     * @param buffer byte array of data to send
+     * 
+     * @see #write(byte)
+     */
     public void write(byte[] buffer) {
         for (byte b : buffer) {
             write(b);
         }
     }
 
+    /**
+     * Writes a single byte through the SPP connection
+     * 
+     * @param buffer byte to send
+     * 
+     * @see #write(byte[])
+     */
     public void write(byte buffer) {
         mWriteThread.write(buffer);
     }
 
+    /**
+     * Reads bytes from buffered received data
+     *
+     *
+     * @param len number of bytes to read
+     * 
+     * @return byte[] - the data read
+     * 
+     * @throws IOException when no connection open
+     * @throws IllegalStateException when <code>len</code> is longer than the number
+     *         of bytes available to read
+     * 
+     * @see #read()
+     */
     public byte[] read(int len) throws IOException, IllegalStateException {
         if (getState() != STATE_CONNECTED) {
             throw new IllegalStateException("BluetoothSppClient::read: attempt to read without connection open");
@@ -110,14 +223,38 @@ public class BluetoothSppClient {
         return tmp;
     }
 
+    /**
+     * Reads one byte from buffered received data
+     *
+     * @return byte - the byte read
+     * 
+     * @throws IOException when no connection open
+     * @throws IllegalStateException when no bytes are available to be read
+     * 
+     * @see #read(int)
+     */
     public byte read() throws IOException, IllegalStateException {
         return read(1)[0];
     }
 
+    /**
+     * Gets the number of bytes of data available in the received data buffer
+     * 
+     * @return int - number of bytes in buffer
+     */
     public int getReadBufferSize() {
         return mReadThread.getBufferSize();
     }
 
+    /**
+     * Gets SPP client state
+     * 
+     * @return int - enumeration of current state
+     * 
+     * @see #STATE_NONE
+     * @see #STATE_CONNECTING
+     * @see #STATE_CONNECTED
+     */
     public int getState() {
         return mBluetoothConnectionState;
     }

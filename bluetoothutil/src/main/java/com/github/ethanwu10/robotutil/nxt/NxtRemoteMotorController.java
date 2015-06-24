@@ -1,11 +1,12 @@
-package com.github.ethanwu10.bluetoothutil.robotutil.nxt;
+package com.github.ethanwu10.robotutil.nxt;
 
 import com.github.ethanwu10.bluetoothutil.BluetoothSppClient;
-import com.github.ethanwu10.bluetoothutil.robotutil.MotorController;
-import com.github.ethanwu10.bluetoothutil.robotutil.MotorState;
+import com.github.ethanwu10.robotutil.MotorController;
+import com.github.ethanwu10.robotutil.MotorState;
 
 /**
- * Controls motors on an NXT connected via Bluetooth (using a {@link com.github.ethanwu10.bluetoothutil.BluetoothSppClient})
+ * Controls motors on an NXT connected via Bluetooth (using a {@link BluetoothSppClient})
+ *
  * @author Ethan
  */
 public class NxtRemoteMotorController implements MotorController {
@@ -34,6 +35,12 @@ public class NxtRemoteMotorController implements MotorController {
         public static final byte RAMPDOWN = 0x40;
     }
 
+    /**
+     * Constructs an {@link com.github.ethanwu10.robotutil.nxt.NxtRemoteMotorController}
+     * given an active {@link com.github.ethanwu10.bluetoothutil.BluetoothSppClient}
+     *
+     * @param sppClient Bluetooth SPP client to use for connection
+     */
     public NxtRemoteMotorController(BluetoothSppClient sppClient) {
         mBtSppClient = sppClient;
     }
@@ -101,9 +108,9 @@ public class NxtRemoteMotorController implements MotorController {
     }
 
     /**
-     * Wrapper for {@link #setMotorStates(com.github.ethanwu10.bluetoothutil.robotutil.MotorState[])}
+     * Wrapper for {@link #setMotorStates(com.github.ethanwu10.robotutil.MotorState[])}
      * @param motorState motor state to update
-     * @see #setMotorStates(com.github.ethanwu10.bluetoothutil.robotutil.MotorState[])
+     * @see #setMotorStates(com.github.ethanwu10.robotutil.MotorState[])
      */
     public void setMotorState(MotorState motorState) {
         MotorState[] motorStates = new MotorState[1];
