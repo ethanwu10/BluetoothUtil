@@ -141,7 +141,7 @@ public class BluetoothSppClient {
     public synchronized void close() {
         try {
             if (mReadThread != null) {
-                mReadThread.interrupt();
+                mReadThread.cancel();
                 mReadThread = null;
             }
             if (mWriteThread != null) {
@@ -154,6 +154,7 @@ public class BluetoothSppClient {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        setState(STATE_NONE);
     }
 
     /**
@@ -213,7 +214,7 @@ public class BluetoothSppClient {
         if (getState() != STATE_CONNECTED) {
             throw new IllegalStateException("BluetoothSppClient::read: attempt to read without connection open");
         }
-        if (mReadThread.getNextByte() < len) {
+        if (len > getReadBufferSize()) {
             throw new IOException("BluetoothSppClient::read: attempt to get more elements than available");
         }
         byte[] tmp = new byte[len];
@@ -351,6 +352,7 @@ public class BluetoothSppClient {
         public static final int BUFFER_SIZE = 1024;
         private final BluetoothSocket mmSocket;
         private final InputStream  mmInStream;
+        boolean isRunning = true;
 
         private Queue<Byte> queued_bytes;
 
@@ -370,9 +372,9 @@ public class BluetoothSppClient {
 
         public void run() {
             byte[] buf = new byte[BUFFER_SIZE];
-            int bytes_read;
+            int bytes_read = 0;
 
-            while (true) {
+            while (isRunning) {
                 try {
                     bytes_read = mmInStream.read(buf, 0, BUFFER_SIZE);
 
@@ -381,22 +383,18 @@ public class BluetoothSppClient {
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
-                    if (e.getMessage().equals("socket closed")) { //if socket closed, quit
-                        break;
-                    }
+                }
+                if (bytes_read == -1) { //if socket closed, quit
+                    break;
                 }
             }
         }
 
         public void cancel() {
-            try {
-                mmSocket.close();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            isRunning = false;
         }
 
-        public byte getNextByte() throws IOException {
+        public synchronized byte getNextByte() throws IOException {
             if (!queued_bytes.isEmpty()) {
                 Byte element = queued_bytes.element();
                 queued_bytes.remove();
